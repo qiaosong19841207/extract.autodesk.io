@@ -25,8 +25,11 @@ var config =require ('./config') ;
 var utils =require ('./utils') ;
 var forgeToken =require ('./forge-token') ;
 
+
+var  CHUNK_SIZE  = 5;
 var router =express.Router () ;
-router.use (bodyParser.json ()) ;
+router.use (bodyParser.json ()) ; 
+
 
 var uploadToOSS =function (identifier) {
 	var bucket =config.bucket ;
@@ -37,15 +40,127 @@ var uploadToOSS =function (identifier) {
 					json.bytesPosted +=chunk.length ;
 					fs.writeFile (utils.data (identifier), JSON.stringify (json)) ;
 				}) ;
-			var ObjectsApi =new ForgeSDK.ObjectsApi () ;
-			return (ObjectsApi.uploadObject (bucket, json.name, json.bytesRead, stream, {}, forgeToken.RW, forgeToken.RW.getCredentials ())) ;
+			
+			// direct upload for small size file
+			//var ObjectsApi =new ForgeSDK.ObjectsApi () ;
+			//return (ObjectsApi.uploadObject (bucket, json.name, json.bytesRead, stream, {}, forgeToken.RW, forgeToken.RW.getCredentials ())) ;
+			
+			// resumable upload for large size file
+			return resumableUploadFile(bucket,utils.path ('tmp/' + json.name),json.name);
 		})
 		.then (function (response) {
-			response.body.key =identifier ;
-			return (utils.writeFile (utils.data (identifier), response.body)) ;
+
+			//random sequence of the resolved body. Check which one is the last chunk , status code is 200
+			// get out the body.
+			var index = -1;
+			
+			for(i in response)
+				{
+
+					if(response[i].statusCode == 200){
+						index = i;
+						break;
+					}
+				}
+			if(index > -1)
+			{
+				response[index].body.key =identifier ;
+				return (utils.writeFile (utils.data (identifier), response[index].body)) ;
+			}
+			else{
+				// return  fail?
+			}
 		})
 	) ;
 } ;
+
+
+// random string for session id
+function randomString(length, chars) {
+    var result = '';
+    for (var i = length; i > 0; --i) result += chars[Math.floor(Math.random() * chars.length)];
+    return result;
+}
+
+//upload by chunk
+
+var resumableUploadFile = function(bucketKey, filePathName, fileName){
+    console.log("**** Resumable Uploading file. bucket:"+ bucketKey + " filePath:"+filePathName);
+    return new Promise(function(resolve, reject) {
+
+         fs.stat(filePathName, function (err, stats) {
+
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                var fileSize = stats.size ;
+                 var chunkSize = CHUNK_SIZE * 1024 * 1024 ;
+                 var nbChunks = Math.round (0.5 + fileSize / chunkSize) ;
+                 var rString = randomString(32,     '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');
+
+                 var sessionID = 'forge-xiaodong-test-' + rString;
+
+                  function unitPromise(n, chunkSize) {
+
+                     return new Promise(function(resolve, reject){
+                            var start = index * chunkSize;
+                        var end = Math.min(fileSize, (index + 1) * chunkSize) - 1;
+                        var contentRange = 'bytes ' + start + '-' + end + '/' + fileSize;
+                        var length = end - start + 1;
+                            console.log("**** 分块上载:"+ start + 
+                            " end:"+end );
+
+
+						var readStream = fs.createReadStream(filePathName, { start: start, end: end });
+						var ObjectsApi =new ForgeSDK.ObjectsApi () ;
+                        ObjectsApi.uploadChunk(bucketKey, 
+                                            fileName, 
+                                            length, 
+                                            contentRange,
+                                             sessionID, 
+                                             readStream, {}, 
+                                             forgeToken.TwoLegged, 
+                                             forgeToken.TwoLegged.getCredentials())
+                        .then(
+                            function(res){
+                                if(res.statusCode == 202)
+                                {
+                                    console.log("*********one chunk upload succeeded!");
+                                    //continue the next chunk
+                                    resolve(res);
+
+                                }
+                                else if(res.statusCode == 200)
+                                {
+                                    //last chunk
+                                    console.log("********last chunk upload succeeded!");
+                                    resolve(res);
+                                }
+                            },function(err){
+                                console.log("*********one chunk upload failed!"+err.statusCode);
+
+                                reject(err);
+                            }
+                        );
+                     });
+                  }//unit promise function
+
+                var uploadpromises = [];
+
+                for( var index=0;index<nbChunks;index++)
+                 {
+                    uploadpromises.push(unitPromise(index,chunkSize));
+                 }
+
+                 Promise.all(uploadpromises)    
+                     .then(function(data){resolve(data); })
+                     .catch(function(err){ reject(err);}); 
+         });
+    });
+  
+};
 
 // Post files to OSS and request translation
 router.post ('/projects', function (req, res) {
