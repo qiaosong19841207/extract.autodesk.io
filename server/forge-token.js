@@ -141,5 +141,7 @@ var rebuildBucketContent =function () {
 
 module.exports ={
 	RW: refreshToken (),
-	RO: refreshTokenRO ()
+	RO: refreshTokenRO (),
+	TwoLegged:oAuth2TwoLegged
+
 } ;
