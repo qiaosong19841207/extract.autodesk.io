@@ -109,7 +109,7 @@ var resumableUploadFile = function(bucketKey, filePathName, fileName){
                         var end = Math.min(fileSize, (index + 1) * chunkSize) - 1;
                         var contentRange = 'bytes ' + start + '-' + end + '/' + fileSize;
                         var length = end - start + 1;
-                            console.log("**** 分块上载:"+ start + 
+                            console.log("**** chunk upload:"+ start + 
                             " end:"+end );
 
 
