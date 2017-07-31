@@ -55,13 +55,12 @@ var uploadToOSS =function (identifier) {
 			var index = -1;
 			
 			for(i in response)
-				{
-
-					if(response[i].statusCode == 200){
-						index = i;
-						break;
-					}
-				}
+			{
+			    if(response[i].statusCode == 200){
+				index = i;
+				break;
+			    }
+			}
 			if(index > -1)
 			{
 				response[index].body.key =identifier ;
@@ -113,8 +112,8 @@ var resumableUploadFile = function(bucketKey, filePathName, fileName){
                             " end:"+end );
 
 
-						var readStream = fs.createReadStream(filePathName, { start: start, end: end });
-						var ObjectsApi =new ForgeSDK.ObjectsApi () ;
+			var readStream = fs.createReadStream(filePathName, { start: start, end: end });
+			var ObjectsApi =new ForgeSDK.ObjectsApi () ;
                         ObjectsApi.uploadChunk(bucketKey, 
                                             fileName, 
                                             length, 
