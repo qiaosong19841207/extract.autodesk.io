@@ -101,7 +101,7 @@ var resumableUploadFile = function(bucketKey, filePathName, fileName){
 
                  var sessionID = 'forge-xiaodong-test-' + rString;
 
-                  function unitPromise(n, chunkSize) {
+                  function unitPromise(index, chunkSize) {
 
                      return new Promise(function(resolve, reject){
                             var start = index * chunkSize;
